@@ -1,15 +1,15 @@
-export default function BlurControls({ blurSize, blurIntensity, onChange }) {
+export default function BlurControls({ blurPadding, blurIntensity, blurShape, onChange }) {
   return (
     <div className="blur-controls">
       <label>
-        <span>블러 크기: {blurSize}</span>
+        <span>박스 크기: {Math.round(blurPadding * 100)}%</span>
         <input
           type="range"
-          min={11}
-          max={101}
-          step={2}
-          value={blurSize}
-          onChange={(e) => onChange({ blurSize: Number(e.target.value) })}
+          min={0}
+          max={100}
+          step={5}
+          value={Math.round(blurPadding * 100)}
+          onChange={(e) => onChange({ blurPadding: Number(e.target.value) / 100 })}
         />
       </label>
       <label>
@@ -23,6 +23,23 @@ export default function BlurControls({ blurSize, blurIntensity, onChange }) {
           onChange={(e) => onChange({ blurIntensity: Number(e.target.value) })}
         />
       </label>
+      <div className="shape-toggle">
+        <span>블러 모양</span>
+        <div className="shape-buttons">
+          <button
+            className={blurShape === 'rect' ? 'active' : ''}
+            onClick={() => onChange({ blurShape: 'rect' })}
+          >
+            <span className="shape-icon shape-rect" /> 네모
+          </button>
+          <button
+            className={blurShape === 'circle' ? 'active' : ''}
+            onClick={() => onChange({ blurShape: 'circle' })}
+          >
+            <span className="shape-icon shape-circle" /> 원
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

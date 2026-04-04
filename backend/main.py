@@ -1,5 +1,4 @@
 import io
-import os
 import uuid
 import zipfile
 import time
@@ -68,8 +67,9 @@ async def detect(files: list[UploadFile] = File(...)):
 
 class BlurRequest(BaseModel):
     image_id: str
-    blur_size: int = 51
+    blur_padding: float = 0.3
     blur_intensity: int = 5
+    blur_shape: str = "rect"
     faces: list[dict]
 
 
@@ -80,7 +80,7 @@ def blur_image(req: BlurRequest):
         return Response(status_code=404, content="Image not found")
 
     image = cv2.imread(str(image_path))
-    result = blur_faces(image, req.faces, req.blur_size, req.blur_intensity)
+    result = blur_faces(image, req.faces, req.blur_padding, req.blur_intensity, req.blur_shape)
     jpeg_bytes = encode_jpeg(result)
 
     return Response(content=jpeg_bytes, media_type="image/jpeg")
@@ -94,8 +94,9 @@ class BlurAllImage(BaseModel):
 
 class BlurAllRequest(BaseModel):
     images: list[BlurAllImage]
-    blur_size: int = 51
+    blur_padding: float = 0.3
     blur_intensity: int = 5
+    blur_shape: str = "rect"
 
 
 @app.post("/api/blur-all")
@@ -107,7 +108,7 @@ def blur_all(req: BlurAllRequest):
             if not image_path.exists():
                 continue
             image = cv2.imread(str(image_path))
-            result = blur_faces(image, item.faces, req.blur_size, req.blur_intensity)
+            result = blur_faces(image, item.faces, req.blur_padding, req.blur_intensity, req.blur_shape)
             jpeg_bytes = encode_jpeg(result)
             zf.writestr(item.filename, jpeg_bytes)
 

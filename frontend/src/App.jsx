@@ -10,8 +10,9 @@ export default function App() {
   const [phase, setPhase] = useState('upload'); // upload | loading | edit
   const [images, setImages] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [blurSize, setBlurSize] = useState(51);
+  const [blurPadding, setBlurPadding] = useState(0.3);
   const [blurIntensity, setBlurIntensity] = useState(5);
+  const [blurShape, setBlurShape] = useState('rect');
   const [downloading, setDownloading] = useState(false);
 
   async function handleUpload(files) {
@@ -47,9 +48,10 @@ export default function App() {
     );
   }
 
-  function handleBlurChange({ blurSize: bs, blurIntensity: bi }) {
-    if (bs !== undefined) setBlurSize(bs);
+  function handleBlurChange({ blurPadding: bp, blurIntensity: bi, blurShape: bs }) {
+    if (bp !== undefined) setBlurPadding(bp);
     if (bi !== undefined) setBlurIntensity(bi);
+    if (bs !== undefined) setBlurShape(bs);
   }
 
   async function downloadOne() {
@@ -61,7 +63,7 @@ export default function App() {
     }
     setDownloading(true);
     try {
-      const blob = await blurImage(img.image_id, selectedFaces, blurSize, blurIntensity);
+      const blob = await blurImage(img.image_id, selectedFaces, blurPadding, blurIntensity, blurShape);
       triggerDownload(blob, `blurred_${img.filename}`);
     } catch {
       alert('다운로드 실패');
@@ -83,7 +85,7 @@ export default function App() {
     }
     setDownloading(true);
     try {
-      const blob = await blurAll(payload, blurSize, blurIntensity);
+      const blob = await blurAll(payload, blurPadding, blurIntensity, blurShape);
       triggerDownload(blob, 'blurred_images.zip');
     } catch {
       alert('다운로드 실패');
@@ -132,29 +134,35 @@ export default function App() {
             currentIndex={currentIndex}
             onSelect={setCurrentIndex}
           />
-          <ImageEditor
-            image={current}
-            blurSize={blurSize}
-            blurIntensity={blurIntensity}
-            onToggleFace={toggleFace}
-          />
-          <BlurControls
-            blurSize={blurSize}
-            blurIntensity={blurIntensity}
-            onChange={handleBlurChange}
-          />
-          <div className="actions">
-            <button onClick={downloadOne} disabled={downloading}>
-              {downloading ? '처리 중...' : '이 사진 다운로드'}
-            </button>
-            {images.length > 1 && (
-              <button onClick={downloadAll} disabled={downloading}>
-                {downloading ? '처리 중...' : '전체 다운로드 (ZIP)'}
-              </button>
-            )}
-            <button className="btn-secondary" onClick={reset}>
-              다시 시작
-            </button>
+          <div className="edit-layout">
+            <ImageEditor
+              image={current}
+              blurPadding={blurPadding}
+              blurIntensity={blurIntensity}
+              blurShape={blurShape}
+              onToggleFace={toggleFace}
+            />
+            <div className="sidebar">
+              <BlurControls
+                blurPadding={blurPadding}
+                blurIntensity={blurIntensity}
+                blurShape={blurShape}
+                onChange={handleBlurChange}
+              />
+              <div className="actions">
+                <button onClick={downloadOne} disabled={downloading}>
+                  {downloading ? '처리 중...' : '이 사진 다운로드'}
+                </button>
+                {images.length > 1 && (
+                  <button onClick={downloadAll} disabled={downloading}>
+                    {downloading ? '처리 중...' : '전체 다운로드 (ZIP)'}
+                  </button>
+                )}
+                <button className="btn-secondary" onClick={reset}>
+                  다시 시작
+                </button>
+              </div>
+            </div>
           </div>
         </>
       )}

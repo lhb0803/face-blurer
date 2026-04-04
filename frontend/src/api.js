@@ -13,14 +13,15 @@ export async function detectFaces(files) {
   return res.json();
 }
 
-export async function blurImage(imageId, faces, blurSize, blurIntensity) {
+export async function blurImage(imageId, faces, blurPadding, blurIntensity, blurShape) {
   const res = await fetch(`${API_BASE}/blur`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       image_id: imageId,
-      blur_size: blurSize,
+      blur_padding: blurPadding,
       blur_intensity: blurIntensity,
+      blur_shape: blurShape,
       faces,
     }),
   });
@@ -28,14 +29,15 @@ export async function blurImage(imageId, faces, blurSize, blurIntensity) {
   return res.blob();
 }
 
-export async function blurAll(images, blurSize, blurIntensity) {
+export async function blurAll(images, blurPadding, blurIntensity, blurShape) {
   const res = await fetch(`${API_BASE}/blur-all`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       images,
-      blur_size: blurSize,
+      blur_padding: blurPadding,
       blur_intensity: blurIntensity,
+      blur_shape: blurShape,
     }),
   });
   if (!res.ok) throw new Error('Blur all failed');

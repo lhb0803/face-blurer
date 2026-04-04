@@ -1,6 +1,6 @@
 import { useRef, useEffect, useCallback } from 'react';
 
-export default function ImageEditor({ image, blurSize, blurIntensity, onToggleFace }) {
+export default function ImageEditor({ image, blurPadding, blurIntensity, blurShape, onToggleFace }) {
   const canvasRef = useRef();
   const imgRef = useRef();
 
@@ -17,36 +17,63 @@ export default function ImageEditor({ image, blurSize, blurIntensity, onToggleFa
     const ctx = canvas.getContext('2d');
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-    // Draw blur on selected faces
-    const blurPx = Math.round((blurSize / 101) * 30 * scale);
+    const blurPx = Math.max(2, blurIntensity * 3);
+
     for (const face of image.faces) {
       if (!face.selected) continue;
-      const x = face.x * scale;
-      const y = face.y * scale;
-      const w = face.w * scale;
-      const h = face.h * scale;
+
+      const fx = face.x * scale;
+      const fy = face.y * scale;
+      const fw = face.w * scale;
+      const fh = face.h * scale;
+
+      // Expand by padding
+      const padX = fw * blurPadding;
+      const padY = fh * blurPadding;
+      const x = Math.max(0, fx - padX);
+      const y = Math.max(0, fy - padY);
+      const w = Math.min(canvas.width - x, fw + padX * 2);
+      const h = Math.min(canvas.height - y, fh + padY * 2);
 
       ctx.save();
       ctx.beginPath();
-      ctx.rect(x, y, w, h);
+      if (blurShape === 'circle') {
+        ctx.ellipse(x + w / 2, y + h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
+      } else {
+        ctx.rect(x, y, w, h);
+      }
       ctx.clip();
       ctx.filter = `blur(${blurPx}px)`;
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
       ctx.restore();
     }
 
-    // Draw face rectangles
+    // Draw face outlines
     for (let i = 0; i < image.faces.length; i++) {
       const face = image.faces[i];
-      const x = face.x * scale;
-      const y = face.y * scale;
-      const w = face.w * scale;
-      const h = face.h * scale;
+      const fx = face.x * scale;
+      const fy = face.y * scale;
+      const fw = face.w * scale;
+      const fh = face.h * scale;
+
+      const padX = fw * blurPadding;
+      const padY = fh * blurPadding;
+      const x = Math.max(0, fx - padX);
+      const y = Math.max(0, fy - padY);
+      const w = Math.min(canvas.width - x, fw + padX * 2);
+      const h = Math.min(canvas.height - y, fh + padY * 2);
 
       ctx.strokeStyle = face.selected ? '#00ff88' : '#ff4444';
       ctx.lineWidth = 2;
       ctx.setLineDash(face.selected ? [] : [6, 4]);
-      ctx.strokeRect(x, y, w, h);
+
+      ctx.beginPath();
+      if (blurShape === 'circle') {
+        ctx.ellipse(x + w / 2, y + h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
+        ctx.stroke();
+      } else {
+        ctx.strokeRect(x, y, w, h);
+      }
       ctx.setLineDash([]);
 
       // Label
@@ -55,7 +82,7 @@ export default function ImageEditor({ image, blurSize, blurIntensity, onToggleFa
       ctx.fillStyle = face.selected ? '#00ff88' : '#ff4444';
       ctx.fillText(label, x + 4, y - 6);
     }
-  }, [image, blurSize, blurIntensity]);
+  }, [image, blurPadding, blurIntensity, blurShape]);
 
   useEffect(() => {
     const img = new Image();
@@ -86,7 +113,15 @@ export default function ImageEditor({ image, blurSize, blurIntensity, onToggleFa
       const fy = face.y * scale;
       const fw = face.w * scale;
       const fh = face.h * scale;
-      if (cx >= fx && cx <= fx + fw && cy >= fy && cy <= fy + fh) {
+
+      const padX = fw * blurPadding;
+      const padY = fh * blurPadding;
+      const bx = Math.max(0, fx - padX);
+      const by = Math.max(0, fy - padY);
+      const bw = fw + padX * 2;
+      const bh = fh + padY * 2;
+
+      if (cx >= bx && cx <= bx + bw && cy >= by && cy <= by + bh) {
         onToggleFace(i);
         return;
       }
