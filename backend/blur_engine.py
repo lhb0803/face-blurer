@@ -1,18 +1,26 @@
 import cv2
 import numpy as np
 import mediapipe as mp
+from mediapipe.tasks import python
+from mediapipe.tasks.python import vision
+from pathlib import Path
 
 
-_face_detection = None
+MODEL_PATH = Path(__file__).parent / "blaze_face_short_range.tflite"
+
+_detector = None
 
 
 def _get_detector():
-    global _face_detection
-    if _face_detection is None:
-        _face_detection = mp.solutions.face_detection.FaceDetection(
-            model_selection=1, min_detection_confidence=0.5
+    global _detector
+    if _detector is None:
+        base_options = python.BaseOptions(model_asset_path=str(MODEL_PATH))
+        options = vision.FaceDetectorOptions(
+            base_options=base_options,
+            min_detection_confidence=0.5,
         )
-    return _face_detection
+        _detector = vision.FaceDetector.create_from_options(options)
+    return _detector
 
 
 def detect_faces(image_bytes: bytes) -> tuple[np.ndarray, list[dict]]:
@@ -26,23 +34,23 @@ def detect_faces(image_bytes: bytes) -> tuple[np.ndarray, list[dict]]:
     if image is None:
         raise ValueError("Cannot decode image")
 
-    h, w = image.shape[:2]
     rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-    results = _get_detector().process(rgb)
+    mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+    result = _get_detector().detect(mp_image)
 
+    h, w = image.shape[:2]
     faces = []
-    if results.detections:
-        for det in results.detections:
-            bb = det.location_data.relative_bounding_box
-            x = max(0, int(bb.xmin * w))
-            y = max(0, int(bb.ymin * h))
-            fw = min(int(bb.width * w), w - x)
-            fh = min(int(bb.height * h), h - y)
-            if fw > 0 and fh > 0:
-                faces.append({
-                    "x": x, "y": y, "w": fw, "h": fh,
-                    "confidence": round(det.score[0], 3),
-                })
+    for det in result.detections:
+        bb = det.bounding_box
+        x = max(0, bb.origin_x)
+        y = max(0, bb.origin_y)
+        fw = min(bb.width, w - x)
+        fh = min(bb.height, h - y)
+        if fw > 0 and fh > 0:
+            faces.append({
+                "x": x, "y": y, "w": fw, "h": fh,
+                "confidence": round(det.categories[0].score, 3),
+            })
 
     return image, faces
 
