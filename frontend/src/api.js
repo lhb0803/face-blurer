@@ -1,24 +1,42 @@
-const API_BASE = '/api';
+const API_BASE = import.meta.env.VITE_API_BASE || '/api';
 
-export async function detectFaces(files) {
-  const formData = new FormData();
+export async function uploadAndDetect(files) {
+  const results = [];
+
   for (const file of files) {
-    formData.append('files', file);
+    // 1. Get presigned upload URL
+    const urlRes = await fetch(`${API_BASE}/upload-url`, { method: 'POST' });
+    if (!urlRes.ok) throw new Error('Failed to get upload URL');
+    const { upload_url, image_id, s3_key } = await urlRes.json();
+
+    // 2. Upload directly to S3
+    await fetch(upload_url, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'image/jpeg' },
+      body: file,
+    });
+
+    // 3. Detect faces
+    const detectRes = await fetch(`${API_BASE}/detect`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image_id, s3_key, filename: file.name }),
+    });
+    if (!detectRes.ok) throw new Error('Detection failed');
+
+    results.push(await detectRes.json());
   }
-  const res = await fetch(`${API_BASE}/detect`, {
-    method: 'POST',
-    body: formData,
-  });
-  if (!res.ok) throw new Error('Detection failed');
-  return res.json();
+
+  return { results };
 }
 
-export async function blurImage(imageId, faces, blurPadding, blurIntensity, blurShape) {
+export async function blurImage(imageId, s3Key, faces, blurPadding, blurIntensity, blurShape) {
   const res = await fetch(`${API_BASE}/blur`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       image_id: imageId,
+      s3_key: s3Key,
       blur_padding: blurPadding,
       blur_intensity: blurIntensity,
       blur_shape: blurShape,
@@ -26,7 +44,7 @@ export async function blurImage(imageId, faces, blurPadding, blurIntensity, blur
     }),
   });
   if (!res.ok) throw new Error('Blur failed');
-  return res.blob();
+  return res.json();
 }
 
 export async function blurAll(images, blurPadding, blurIntensity, blurShape) {
@@ -41,9 +59,5 @@ export async function blurAll(images, blurPadding, blurIntensity, blurShape) {
     }),
   });
   if (!res.ok) throw new Error('Blur all failed');
-  return res.blob();
-}
-
-export async function cleanup() {
-  await fetch(`${API_BASE}/cleanup`, { method: 'DELETE' });
+  return res.json();
 }

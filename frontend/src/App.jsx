@@ -3,7 +3,7 @@ import UploadZone from './components/UploadZone';
 import ImageGallery from './components/ImageGallery';
 import ImageEditor from './components/ImageEditor';
 import BlurControls from './components/BlurControls';
-import { detectFaces, blurImage, blurAll, cleanup } from './api';
+import { uploadAndDetect, blurImage, blurAll } from './api';
 import './App.css';
 
 export default function App() {
@@ -18,7 +18,7 @@ export default function App() {
   async function handleUpload(files) {
     setPhase('loading');
     try {
-      const data = await detectFaces(files);
+      const data = await uploadAndDetect(files);
       const enriched = data.results.map((r, i) => ({
         ...r,
         localUrl: URL.createObjectURL(files[i]),
@@ -63,8 +63,10 @@ export default function App() {
     }
     setDownloading(true);
     try {
-      const blob = await blurImage(img.image_id, selectedFaces, blurPadding, blurIntensity, blurShape);
-      triggerDownload(blob, `blurred_${img.filename}`);
+      const { download_url } = await blurImage(
+        img.image_id, img.s3_key, selectedFaces, blurPadding, blurIntensity, blurShape
+      );
+      triggerDownload(download_url, `blurred_${img.filename}`);
     } catch {
       alert('다운로드 실패');
     }
@@ -76,6 +78,7 @@ export default function App() {
       .filter((img) => img.faces.some((f) => f.selected))
       .map((img) => ({
         image_id: img.image_id,
+        s3_key: img.s3_key,
         filename: img.filename,
         faces: img.faces.filter((f) => f.selected),
       }));
@@ -85,25 +88,22 @@ export default function App() {
     }
     setDownloading(true);
     try {
-      const blob = await blurAll(payload, blurPadding, blurIntensity, blurShape);
-      triggerDownload(blob, 'blurred_images.zip');
+      const { download_url } = await blurAll(payload, blurPadding, blurIntensity, blurShape);
+      triggerDownload(download_url, 'blurred_images.zip');
     } catch {
       alert('다운로드 실패');
     }
     setDownloading(false);
   }
 
-  function triggerDownload(blob, filename) {
-    const url = URL.createObjectURL(blob);
+  function triggerDownload(url, filename) {
     const a = document.createElement('a');
     a.href = url;
     a.download = filename;
     a.click();
-    URL.revokeObjectURL(url);
   }
 
   function reset() {
-    cleanup();
     images.forEach((img) => URL.revokeObjectURL(img.localUrl));
     setImages([]);
     setPhase('upload');

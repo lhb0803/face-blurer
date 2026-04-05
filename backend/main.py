@@ -1,41 +1,32 @@
 import io
+import os
 import uuid
 import zipfile
-import time
-from pathlib import Path
 
+import boto3
 import cv2
-from fastapi import FastAPI, File, UploadFile
+import numpy as np
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, Response
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import Response
+from mangum import Mangum
 from pydantic import BaseModel
 
 from blur_engine import detect_faces, blur_faces, encode_jpeg
 
 app = FastAPI(title="Face Blurer API")
 
+FRONTEND_ORIGIN = os.environ.get("FRONTEND_ORIGIN", "*")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[FRONTEND_ORIGIN] if FRONTEND_ORIGIN != "*" else ["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-UPLOAD_DIR = Path(__file__).parent / "uploads"
-UPLOAD_DIR.mkdir(exist_ok=True)
-
-FRONTEND_DIR = Path(__file__).parent.parent / "frontend" / "dist"
-
-MAX_AGE_SECONDS = 3600  # 1 hour
-
-
-def _cleanup_old_files():
-    """Delete uploads older than MAX_AGE_SECONDS."""
-    now = time.time()
-    for f in UPLOAD_DIR.iterdir():
-        if f.is_file() and (now - f.stat().st_mtime) > MAX_AGE_SECONDS:
-            f.unlink(missing_ok=True)
+S3_BUCKET = os.environ.get("S3_BUCKET", "face-blurer-uploads")
+s3 = boto3.client("s3")
 
 
 @app.get("/api/health")
@@ -43,33 +34,49 @@ def health():
     return {"status": "ok"}
 
 
+@app.post("/api/upload-url")
+def get_upload_url():
+    """Generate presigned URL for client to upload directly to S3."""
+    image_id = str(uuid.uuid4())
+    key = f"uploads/{image_id}.jpg"
+
+    url = s3.generate_presigned_url(
+        "put_object",
+        Params={"Bucket": S3_BUCKET, "Key": key, "ContentType": "image/jpeg"},
+        ExpiresIn=300,
+    )
+
+    return {"upload_url": url, "image_id": image_id, "s3_key": key}
+
+
+class DetectRequest(BaseModel):
+    image_id: str
+    s3_key: str
+    filename: str = "image.jpg"
+
+
 @app.post("/api/detect")
-async def detect(files: list[UploadFile] = File(...)):
-    _cleanup_old_files()
+def detect(req: DetectRequest):
+    """Detect faces from an image already uploaded to S3."""
+    obj = s3.get_object(Bucket=S3_BUCKET, Key=req.s3_key)
+    image_bytes = obj["Body"].read()
 
-    results = []
-    for file in files:
-        image_bytes = await file.read()
-        image, faces = detect_faces(image_bytes)
+    image, faces = detect_faces(image_bytes)
+    h, w = image.shape[:2]
 
-        image_id = str(uuid.uuid4())
-        h, w = image.shape[:2]
-        save_path = UPLOAD_DIR / f"{image_id}.jpg"
-        cv2.imwrite(str(save_path), image)
-
-        results.append({
-            "image_id": image_id,
-            "filename": file.filename,
-            "width": w,
-            "height": h,
-            "faces": faces,
-        })
-
-    return {"results": results}
+    return {
+        "image_id": req.image_id,
+        "s3_key": req.s3_key,
+        "filename": req.filename,
+        "width": w,
+        "height": h,
+        "faces": faces,
+    }
 
 
 class BlurRequest(BaseModel):
     image_id: str
+    s3_key: str
     blur_padding: float = 0.3
     blur_intensity: int = 5
     blur_shape: str = "rect"
@@ -78,19 +85,31 @@ class BlurRequest(BaseModel):
 
 @app.post("/api/blur")
 def blur_image(req: BlurRequest):
-    image_path = UPLOAD_DIR / f"{req.image_id}.jpg"
-    if not image_path.exists():
-        return Response(status_code=404, content="Image not found")
+    """Blur faces, save result to S3, return presigned download URL."""
+    obj = s3.get_object(Bucket=S3_BUCKET, Key=req.s3_key)
+    image_bytes = obj["Body"].read()
 
-    image = cv2.imread(str(image_path))
+    arr = np.frombuffer(image_bytes, dtype=np.uint8)
+    image = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+
     result = blur_faces(image, req.faces, req.blur_padding, req.blur_intensity, req.blur_shape)
     jpeg_bytes = encode_jpeg(result)
 
-    return Response(content=jpeg_bytes, media_type="image/jpeg")
+    result_key = f"results/{req.image_id}.jpg"
+    s3.put_object(Bucket=S3_BUCKET, Key=result_key, Body=jpeg_bytes, ContentType="image/jpeg")
+
+    download_url = s3.generate_presigned_url(
+        "get_object",
+        Params={"Bucket": S3_BUCKET, "Key": result_key},
+        ExpiresIn=600,
+    )
+
+    return {"download_url": download_url}
 
 
 class BlurAllImage(BaseModel):
     image_id: str
+    s3_key: str
     filename: str = "image.jpg"
     faces: list[dict]
 
@@ -104,41 +123,31 @@ class BlurAllRequest(BaseModel):
 
 @app.post("/api/blur-all")
 def blur_all(req: BlurAllRequest):
+    """Blur all images, create ZIP, upload to S3, return download URL."""
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
         for item in req.images:
-            image_path = UPLOAD_DIR / f"{item.image_id}.jpg"
-            if not image_path.exists():
-                continue
-            image = cv2.imread(str(image_path))
+            obj = s3.get_object(Bucket=S3_BUCKET, Key=item.s3_key)
+            image_bytes = obj["Body"].read()
+
+            arr = np.frombuffer(image_bytes, dtype=np.uint8)
+            image = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+
             result = blur_faces(image, item.faces, req.blur_padding, req.blur_intensity, req.blur_shape)
             jpeg_bytes = encode_jpeg(result)
             zf.writestr(item.filename, jpeg_bytes)
 
-    return Response(
-        content=buf.getvalue(),
-        media_type="application/zip",
-        headers={"Content-Disposition": "attachment; filename=blurred_images.zip"},
+    zip_key = f"results/{uuid.uuid4()}.zip"
+    s3.put_object(Bucket=S3_BUCKET, Key=zip_key, Body=buf.getvalue(), ContentType="application/zip")
+
+    download_url = s3.generate_presigned_url(
+        "get_object",
+        Params={"Bucket": S3_BUCKET, "Key": zip_key},
+        ExpiresIn=600,
     )
 
-
-@app.delete("/api/cleanup")
-def cleanup():
-    count = 0
-    for f in UPLOAD_DIR.iterdir():
-        if f.is_file():
-            f.unlink(missing_ok=True)
-            count += 1
-    return {"deleted": count}
+    return {"download_url": download_url}
 
 
-# Serve frontend static files (production)
-if FRONTEND_DIR.exists():
-    app.mount("/assets", StaticFiles(directory=FRONTEND_DIR / "assets"), name="assets")
-
-    @app.get("/{full_path:path}")
-    def serve_spa(full_path: str):
-        file_path = FRONTEND_DIR / full_path
-        if file_path.is_file():
-            return FileResponse(file_path)
-        return FileResponse(FRONTEND_DIR / "index.html")
+# Lambda handler
+handler = Mangum(app)

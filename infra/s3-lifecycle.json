@@ -1,0 +1,12 @@
+{
+  "Rules": [
+    {
+      "ID": "delete-temp-files-after-1-day",
+      "Status": "Enabled",
+      "Filter": {},
+      "Expiration": {
+        "Days": 1
+      }
+    }
+  ]
+}
