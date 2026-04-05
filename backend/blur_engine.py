@@ -1,12 +1,9 @@
 import cv2
 import numpy as np
-import mediapipe as mp
-from mediapipe.tasks import python
-from mediapipe.tasks.python import vision
 from pathlib import Path
 
 
-MODEL_PATH = Path(__file__).parent / "blaze_face_short_range.tflite"
+MODEL_PATH = Path(__file__).parent / "face_detection_yunet_2023mar.onnx"
 
 _detector = None
 
@@ -14,12 +11,9 @@ _detector = None
 def _get_detector():
     global _detector
     if _detector is None:
-        base_options = python.BaseOptions(model_asset_path=str(MODEL_PATH))
-        options = vision.FaceDetectorOptions(
-            base_options=base_options,
-            min_detection_confidence=0.5,
+        _detector = cv2.FaceDetectorYN.create(
+            str(MODEL_PATH), "", (0, 0), score_threshold=0.5
         )
-        _detector = vision.FaceDetector.create_from_options(options)
     return _detector
 
 
@@ -34,23 +28,24 @@ def detect_faces(image_bytes: bytes) -> tuple[np.ndarray, list[dict]]:
     if image is None:
         raise ValueError("Cannot decode image")
 
-    rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-    mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
-    result = _get_detector().detect(mp_image)
-
     h, w = image.shape[:2]
+    detector = _get_detector()
+    detector.setInputSize((w, h))
+    _, raw_faces = detector.detect(image)
+
     faces = []
-    for det in result.detections:
-        bb = det.bounding_box
-        x = max(0, bb.origin_x)
-        y = max(0, bb.origin_y)
-        fw = min(bb.width, w - x)
-        fh = min(bb.height, h - y)
-        if fw > 0 and fh > 0:
-            faces.append({
-                "x": x, "y": y, "w": fw, "h": fh,
-                "confidence": round(det.categories[0].score, 3),
-            })
+    if raw_faces is not None:
+        for face in raw_faces:
+            x = max(0, int(face[0]))
+            y = max(0, int(face[1]))
+            fw = min(int(face[2]), w - x)
+            fh = min(int(face[3]), h - y)
+            conf = float(face[14])
+            if fw > 0 and fh > 0:
+                faces.append({
+                    "x": x, "y": y, "w": fw, "h": fh,
+                    "confidence": round(conf, 3),
+                })
 
     return image, faces
 

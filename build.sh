@@ -4,9 +4,9 @@ set -e
 # Install Python dependencies
 pip install -r backend/requirements.txt
 
-# Download MediaPipe face detection model
-curl -L -o backend/blaze_face_short_range.tflite \
-  "https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/latest/blaze_face_short_range.tflite"
+# Download OpenCV YuNet face detection model
+curl -L -o backend/face_detection_yunet_2023mar.onnx \
+  "https://github.com/opencv/opencv_zoo/raw/main/models/face_detection_yunet/face_detection_yunet_2023mar.onnx"
 
 # Build frontend
 cd frontend
