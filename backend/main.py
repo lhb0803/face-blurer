@@ -26,7 +26,9 @@ app.add_middleware(
 )
 
 S3_BUCKET = os.environ.get("S3_BUCKET", "face-blurer-uploads")
-s3 = boto3.client("s3")
+S3_REGION = os.environ.get("AWS_REGION", "ap-northeast-2")
+s3 = boto3.client("s3", region_name=S3_REGION,
+                   endpoint_url=f"https://s3.{S3_REGION}.amazonaws.com")
 
 
 @app.get("/api/health")
