@@ -1,41 +1,30 @@
 # Face Blurer
 
-사진 속 인물 얼굴을 자동으로 감지하고 블러 처리하는 웹 앱.
+사진 속 인물 얼굴을 자동으로 감지하고 블러 처리하는 웹 앱. 100% 클라이언트 사이드 — 사진이 서버로 전송되지 않습니다.
 
-## 실행 방법
+**Live**: https://lhb0803.github.io/face-blurer/
 
-### Backend
-
-```bash
-cd backend
-source venv/bin/activate
-uvicorn main:app --host 0.0.0.0 --port 8000 --reload
-```
-
-> 최초 실행 시 venv 세팅:
-> ```bash
-> python3 -m venv venv
-> source venv/bin/activate
-> pip install -r requirements.txt
-> ```
-
-### Frontend
+## 로컬 개발
 
 ```bash
 cd frontend
-npm install    # 최초 1회
+npm install
 npm run dev
 ```
 
-브라우저에서 `http://localhost:5173` 접속.
+브라우저에서 `http://localhost:5173/face-blurer/` 접속.
 
-### 모바일에서 접근
+### 모바일에서 로컬 테스트
 
 iPhone과 Mac이 같은 Wi-Fi에 연결된 상태에서:
 
 1. Mac의 로컬 IP 확인: `ifconfig | grep "inet " | grep -v 127.0.0.1`
-2. `vite.config.js`에 `server.host: true` 추가 (외부 접근 허용)
-3. iPhone 브라우저에서 `http://<Mac IP>:5173` 접속
+2. `vite.config.js`에 `server.host: true` 추가
+3. iPhone 브라우저에서 `http://<Mac IP>:5173/face-blurer/` 접속
+
+## 배포
+
+`main` 브랜치에 push하면 GitHub Actions가 자동으로 GitHub Pages에 배포합니다.
 
 ## 사용법
 

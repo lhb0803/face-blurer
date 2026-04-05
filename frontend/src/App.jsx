@@ -3,7 +3,8 @@ import UploadZone from './components/UploadZone';
 import ImageGallery from './components/ImageGallery';
 import ImageEditor from './components/ImageEditor';
 import BlurControls from './components/BlurControls';
-import { detectFaces, blurImage, blurAll, cleanup } from './api';
+import { detectFaces } from './faceDetection';
+import { exportOne, exportAll } from './blurExport';
 import './App.css';
 
 export default function App() {
@@ -18,13 +19,30 @@ export default function App() {
   async function handleUpload(files) {
     setPhase('loading');
     try {
-      const data = await detectFaces(files);
-      const enriched = data.results.map((r, i) => ({
-        ...r,
-        localUrl: URL.createObjectURL(files[i]),
-        faces: r.faces.map((f) => ({ ...f, selected: true })),
-      }));
-      setImages(enriched);
+      const results = [];
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const localUrl = URL.createObjectURL(file);
+
+        // Load image to get dimensions and run detection
+        const img = new Image();
+        img.src = localUrl;
+        await new Promise((resolve, reject) => {
+          img.onload = resolve;
+          img.onerror = reject;
+        });
+
+        const faces = await detectFaces(img);
+
+        results.push({
+          filename: file.name,
+          localUrl,
+          width: img.naturalWidth,
+          height: img.naturalHeight,
+          faces,
+        });
+      }
+      setImages(results);
       setCurrentIndex(0);
       setPhase('edit');
     } catch {
@@ -63,7 +81,7 @@ export default function App() {
     }
     setDownloading(true);
     try {
-      const blob = await blurImage(img.image_id, selectedFaces, blurPadding, blurIntensity, blurShape);
+      const blob = await exportOne(img, blurPadding, blurIntensity, blurShape);
       triggerDownload(blob, `blurred_${img.filename}`);
     } catch {
       alert('다운로드 실패');
@@ -72,20 +90,14 @@ export default function App() {
   }
 
   async function downloadAll() {
-    const payload = images
-      .filter((img) => img.faces.some((f) => f.selected))
-      .map((img) => ({
-        image_id: img.image_id,
-        filename: img.filename,
-        faces: img.faces.filter((f) => f.selected),
-      }));
-    if (payload.length === 0) {
+    const withFaces = images.filter((img) => img.faces.some((f) => f.selected));
+    if (withFaces.length === 0) {
       alert('블러할 얼굴이 있는 사진이 없습니다.');
       return;
     }
     setDownloading(true);
     try {
-      const blob = await blurAll(payload, blurPadding, blurIntensity, blurShape);
+      const blob = await exportAll(withFaces, blurPadding, blurIntensity, blurShape);
       triggerDownload(blob, 'blurred_images.zip');
     } catch {
       alert('다운로드 실패');
@@ -103,7 +115,6 @@ export default function App() {
   }
 
   function reset() {
-    cleanup();
     images.forEach((img) => URL.revokeObjectURL(img.localUrl));
     setImages([]);
     setPhase('upload');

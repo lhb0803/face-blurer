@@ -2,76 +2,76 @@
 
 ## Project Overview
 
-사진 속 인물 얼굴을 자동 감지하여 블러 처리하는 웹 앱. 모바일(iPhone Safari/Chrome) 사용이 주 목적.
+사진 속 인물 얼굴을 자동 감지하여 블러 처리하는 웹 앱. 100% 클라이언트 사이드. 모바일(iPhone Safari/Chrome) 사용이 주 목적.
 
 ## Architecture
 
 ```
-frontend (React + Vite, port 5173)
-  └─ /api/* ──proxy──> backend (FastAPI, port 8000)
+frontend (React + Vite) → GitHub Pages 정적 배포
+  ├─ 얼굴 감지: @mediapipe/tasks-vision (WASM, 브라우저 실행)
+  ├─ 블러 처리: Canvas API (ctx.filter + ctx.clip)
+  └─ ZIP 생성: jszip
 ```
 
-### Backend (`backend/`)
+서버 없음. 이미지가 사용자 기기를 떠나지 않음.
 
-- **Framework**: FastAPI (Python 3.12)
-- **얼굴 감지**: MediaPipe Face Detection (`model_selection=1`)
-- **블러 처리**: OpenCV `GaussianBlur` (rect) + ellipse mask (circle)
-- **진입점**: `main.py` — 4개 엔드포인트
-- **핵심 로직**: `blur_engine.py` — `detect_faces()`, `blur_faces()`, `encode_jpeg()`
-- **임시 저장**: `uploads/` 디렉토리에 UUID.jpg로 저장, 1시간 후 자동 삭제
+### Backend (`backend/`) — 레거시
 
-### API Endpoints
-
-| Method | Path | 역할 |
-|--------|------|------|
-| POST | `/api/detect` | 이미지 업로드 → 얼굴 좌표 반환 |
-| POST | `/api/blur` | 단일 이미지 블러 처리 → JPEG 반환 |
-| POST | `/api/blur-all` | 복수 이미지 블러 → ZIP 반환 |
-| DELETE | `/api/cleanup` | 업로드 파일 정리 |
+초기에는 FastAPI + OpenCV 서버 사이드 처리였으나, Render 무료 티어 메모리 제한(512MB)으로 클라이언트 전환. 코드는 참고용으로 유지.
 
 ### Frontend (`frontend/`)
 
 - **Framework**: React 18 + Vite (plain JS, no TypeScript)
-- **상태 관리**: `useState` only (라이브러리 없음)
-- **스타일**: 단일 `App.css` (plain CSS, no framework)
-- **의존성**: react, react-dom만 사용 (axios 등 없음)
+- **상태 관리**: `useState` only
+- **스타일**: 단일 `App.css` (plain CSS)
+- **의존성**: react, react-dom, @mediapipe/tasks-vision, jszip
 
-#### Component 구조
+#### 핵심 모듈
 
 ```
-App.jsx          — 전체 상태 관리, 3-phase flow (upload → loading → edit)
-├── UploadZone   — 파일 선택 / 드래그앤드롭
-├── ImageGallery — 복수 이미지 썸네일 (수평 스크롤)
-├── ImageEditor  — canvas 기반 이미지 렌더링 + 블러 미리보기 + 얼굴 탭 토글
-└── BlurControls — 박스 크기 / 블러 강도 슬라이더 + 모양(원/네모) 토글
+src/
+├── App.jsx           — 전체 상태 관리, 3-phase flow (upload → loading → edit)
+├── faceDetection.js  — MediaPipe WASM 얼굴 감지 (CDN에서 모델+wasm 로드)
+├── blurExport.js     — 풀해상도 Canvas 블러 + JPEG/ZIP export
+├── components/
+│   ├── UploadZone    — 파일 선택 / 드래그앤드롭
+│   ├── ImageGallery  — 복수 이미지 썸네일 (수평 스크롤)
+│   ├── ImageEditor   — canvas 기반 블러 미리보기 + 얼굴 탭 토글
+│   └── BlurControls  — 박스 크기 / 블러 강도 슬라이더 + 모양 토글
 ```
 
-#### 미리보기 방식
+#### 얼굴 감지 방식
 
-서버 호출 없이 클라이언트 canvas에서 실시간 처리:
-- `ctx.filter = 'blur(Npx)'` + `ctx.clip()` (rect 또는 ellipse)
-- 다운로드 시에만 서버에서 OpenCV로 정밀 블러 처리
+`@mediapipe/tasks-vision`의 `FaceDetector`:
+- WASM 런타임: jsdelivr CDN에서 로드
+- 모델: Google Storage에서 `blaze_face_short_range` float16 로드
+- `runningMode: 'IMAGE'`, CPU delegate
+
+#### 블러 미리보기 & 다운로드
+
+- 미리보기: 축소된 canvas에서 `ctx.filter = 'blur(Npx)'` + `ctx.clip()` (rect 또는 ellipse)
+- 다운로드: 원본 해상도 canvas에서 동일 로직 → `canvas.toBlob('image/jpeg')`
+- 복수 이미지: jszip으로 ZIP 생성
 
 ### Key Design Decisions
 
-- `blur_padding` (0.0~1.0): 감지된 얼굴 박스 대비 확장 비율. 프론트/백엔드 동일 로직.
-- `blur_intensity` (1~10): 프론트 → `intensity * 3` px CSS blur, 백엔드 → kernel `intensity * 20 + 1`, sigma `intensity * 4`
-- `blur_shape`: "rect" | "circle". 백엔드에서 circle은 ellipse mask + alpha blending.
+- `blur_padding` (0.0~1.0): 감지된 얼굴 박스 대비 확장 비율
+- `blur_intensity` (1~10): `intensity * 3 * (width / 1000)` px CSS blur (해상도 비례)
+- `blur_shape`: "rect" | "circle" (ellipse clip)
+- `base: '/face-blurer/'` in vite.config.js (GitHub Pages 경로)
 
 ## Commands
 
 ```bash
-# Backend
-cd backend && source venv/bin/activate && uvicorn main:app --host 0.0.0.0 --port 8000 --reload
-
-# Frontend
+# 개발
 cd frontend && npm run dev
 
-# Frontend build
-cd frontend && npx vite build
+# 빌드
+cd frontend && npm run build
+
+# 배포: main에 push → GitHub Actions 자동 배포
 ```
 
-## Python Environment
+## Deployment
 
-- Python 3.12.6 via pyenv (`backend/venv/`)
-- 시스템 기본 Python 3.9.1은 SSL 깨져서 사용 불가
+GitHub Pages via `.github/workflows/deploy.yml`. `main` push 시 자동 빌드 + 배포.
