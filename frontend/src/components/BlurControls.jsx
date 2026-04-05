@@ -1,4 +1,4 @@
-export default function BlurControls({ blurPadding, blurIntensity, blurShape, onChange }) {
+export default function BlurControls({ blurPadding, blurIntensity, onChange }) {
   return (
     <div className="blur-controls">
       <label>
@@ -23,23 +23,6 @@ export default function BlurControls({ blurPadding, blurIntensity, blurShape, on
           onChange={(e) => onChange({ blurIntensity: Number(e.target.value) })}
         />
       </label>
-      <div className="shape-toggle">
-        <span>블러 모양</span>
-        <div className="shape-buttons">
-          <button
-            className={blurShape === 'rect' ? 'active' : ''}
-            onClick={() => onChange({ blurShape: 'rect' })}
-          >
-            <span className="shape-icon shape-rect" /> 네모
-          </button>
-          <button
-            className={blurShape === 'circle' ? 'active' : ''}
-            onClick={() => onChange({ blurShape: 'circle' })}
-          >
-            <span className="shape-icon shape-circle" /> 원
-          </button>
-        </div>
-      </div>
     </div>
   );
 }

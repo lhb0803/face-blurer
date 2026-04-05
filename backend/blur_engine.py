@@ -55,13 +55,12 @@ def blur_faces(
     faces: list[dict],
     blur_padding: float = 0.3,
     blur_intensity: int = 5,
-    blur_shape: str = "rect",
+    blur_shape: str = "circle",
 ) -> np.ndarray:
-    """Apply Gaussian blur to face regions.
+    """Apply Gaussian blur to face regions with circular mask.
 
     blur_padding: fraction to expand the face box (0.0 = tight, 1.0 = 2x size)
     blur_intensity: 1-10, controls kernel size and sigma
-    blur_shape: "rect" or "circle"
     """
     img_h, img_w = image.shape[:2]
     kernel = blur_intensity * 20 + 1  # maps 1->21, 10->201
@@ -87,18 +86,15 @@ def blur_faces(
 
         blurred_roi = cv2.GaussianBlur(roi, (kernel, kernel), sigma)
 
-        if blur_shape == "circle":
-            # Create elliptical mask
-            mask = np.zeros(roi.shape[:2], dtype=np.uint8)
-            cx = (x2 - x1) // 2
-            cy = (y2 - y1) // 2
-            axes = ((x2 - x1) // 2, (y2 - y1) // 2)
-            cv2.ellipse(mask, (cx, cy), axes, 0, 0, 360, 255, -1)
-            mask_3ch = mask[:, :, np.newaxis] / 255.0
-            roi_blended = (blurred_roi * mask_3ch + roi * (1 - mask_3ch)).astype(np.uint8)
-            result[y1:y2, x1:x2] = roi_blended
-        else:
-            result[y1:y2, x1:x2] = blurred_roi
+        # Create circular mask (equal radius = max of half-width, half-height)
+        mask = np.zeros(roi.shape[:2], dtype=np.uint8)
+        cx = (x2 - x1) // 2
+        cy = (y2 - y1) // 2
+        r = max(cx, cy)
+        cv2.circle(mask, (cx, cy), r, 255, -1)
+        mask_3ch = mask[:, :, np.newaxis] / 255.0
+        roi_blended = (blurred_roi * mask_3ch + roi * (1 - mask_3ch)).astype(np.uint8)
+        result[y1:y2, x1:x2] = roi_blended
 
     return result
 

@@ -218,59 +218,6 @@ header h1 {
   cursor: pointer;
 }
 
-/* Shape Toggle */
-.shape-toggle {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.shape-toggle > span {
-  font-size: 0.85rem;
-  color: #aaa;
-}
-
-.shape-buttons {
-  display: flex;
-  gap: 8px;
-}
-
-.shape-buttons button {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 10px;
-  border: 2px solid #333;
-  border-radius: 8px;
-  background: transparent;
-  color: #aaa;
-  font-size: 0.85rem;
-  cursor: pointer;
-  transition: border-color 0.2s, color 0.2s;
-}
-
-.shape-buttons button.active {
-  border-color: #4a9eff;
-  color: #fff;
-}
-
-.shape-icon {
-  display: inline-block;
-  width: 16px;
-  height: 16px;
-  border: 2px solid currentColor;
-}
-
-.shape-rect {
-  border-radius: 2px;
-}
-
-.shape-circle {
-  border-radius: 50%;
-}
-
 /* Actions */
 .actions {
   display: flex;

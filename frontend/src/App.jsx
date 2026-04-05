@@ -12,7 +12,6 @@ export default function App() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [blurPadding, setBlurPadding] = useState(0.3);
   const [blurIntensity, setBlurIntensity] = useState(5);
-  const [blurShape, setBlurShape] = useState('rect');
   const [downloading, setDownloading] = useState(false);
 
   async function handleUpload(files) {
@@ -48,10 +47,24 @@ export default function App() {
     );
   }
 
-  function handleBlurChange({ blurPadding: bp, blurIntensity: bi, blurShape: bs }) {
+  function moveFace(faceIndex, newX, newY) {
+    setImages((prev) =>
+      prev.map((img, i) =>
+        i === currentIndex
+          ? {
+              ...img,
+              faces: img.faces.map((f, fi) =>
+                fi === faceIndex ? { ...f, x: newX, y: newY } : f
+              ),
+            }
+          : img
+      )
+    );
+  }
+
+  function handleBlurChange({ blurPadding: bp, blurIntensity: bi }) {
     if (bp !== undefined) setBlurPadding(bp);
     if (bi !== undefined) setBlurIntensity(bi);
-    if (bs !== undefined) setBlurShape(bs);
   }
 
   async function downloadOne() {
@@ -64,9 +77,9 @@ export default function App() {
     setDownloading(true);
     try {
       const { download_url } = await blurImage(
-        img.image_id, img.s3_key, selectedFaces, blurPadding, blurIntensity, blurShape
+        img.image_id, img.s3_key, selectedFaces, blurPadding, blurIntensity
       );
-      triggerDownload(download_url, `blurred_${img.filename}`);
+      await triggerDownload(download_url, `blurred_${img.filename}`);
     } catch {
       alert('다운로드 실패');
     }
@@ -88,15 +101,27 @@ export default function App() {
     }
     setDownloading(true);
     try {
-      const { download_url } = await blurAll(payload, blurPadding, blurIntensity, blurShape);
-      triggerDownload(download_url, 'blurred_images.zip');
+      const { download_url } = await blurAll(payload, blurPadding, blurIntensity);
+      await triggerDownload(download_url, 'blurred_images.zip');
     } catch {
       alert('다운로드 실패');
     }
     setDownloading(false);
   }
 
-  function triggerDownload(url, filename) {
+  async function triggerDownload(url, filename) {
+    try {
+      const res = await fetch(url);
+      const blob = await res.blob();
+      const file = new File([blob], filename, { type: blob.type });
+
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file] });
+        return;
+      }
+    } catch {
+      // Web Share not supported or user cancelled — fall through to link download
+    }
     const a = document.createElement('a');
     a.href = url;
     a.download = filename;
@@ -139,14 +164,13 @@ export default function App() {
               image={current}
               blurPadding={blurPadding}
               blurIntensity={blurIntensity}
-              blurShape={blurShape}
               onToggleFace={toggleFace}
+              onMoveFace={moveFace}
             />
             <div className="sidebar">
               <BlurControls
                 blurPadding={blurPadding}
                 blurIntensity={blurIntensity}
-                blurShape={blurShape}
                 onChange={handleBlurChange}
               />
               <div className="actions">

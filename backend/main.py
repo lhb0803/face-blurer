@@ -81,7 +81,6 @@ class BlurRequest(BaseModel):
     s3_key: str
     blur_padding: float = 0.3
     blur_intensity: int = 5
-    blur_shape: str = "rect"
     faces: list[dict]
 
 
@@ -94,7 +93,7 @@ def blur_image(req: BlurRequest):
     arr = np.frombuffer(image_bytes, dtype=np.uint8)
     image = cv2.imdecode(arr, cv2.IMREAD_COLOR)
 
-    result = blur_faces(image, req.faces, req.blur_padding, req.blur_intensity, req.blur_shape)
+    result = blur_faces(image, req.faces, req.blur_padding, req.blur_intensity)
     jpeg_bytes = encode_jpeg(result)
 
     result_key = f"results/{req.image_id}.jpg"
@@ -120,7 +119,6 @@ class BlurAllRequest(BaseModel):
     images: list[BlurAllImage]
     blur_padding: float = 0.3
     blur_intensity: int = 5
-    blur_shape: str = "rect"
 
 
 @app.post("/api/blur-all")
@@ -135,7 +133,7 @@ def blur_all(req: BlurAllRequest):
             arr = np.frombuffer(image_bytes, dtype=np.uint8)
             image = cv2.imdecode(arr, cv2.IMREAD_COLOR)
 
-            result = blur_faces(image, item.faces, req.blur_padding, req.blur_intensity, req.blur_shape)
+            result = blur_faces(image, item.faces, req.blur_padding, req.blur_intensity)
             jpeg_bytes = encode_jpeg(result)
             zf.writestr(item.filename, jpeg_bytes)
 

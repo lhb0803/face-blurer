@@ -30,7 +30,7 @@ export async function uploadAndDetect(files) {
   return { results };
 }
 
-export async function blurImage(imageId, s3Key, faces, blurPadding, blurIntensity, blurShape) {
+export async function blurImage(imageId, s3Key, faces, blurPadding, blurIntensity) {
   const res = await fetch(`${API_BASE}/blur`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -39,7 +39,6 @@ export async function blurImage(imageId, s3Key, faces, blurPadding, blurIntensit
       s3_key: s3Key,
       blur_padding: blurPadding,
       blur_intensity: blurIntensity,
-      blur_shape: blurShape,
       faces,
     }),
   });
@@ -47,7 +46,7 @@ export async function blurImage(imageId, s3Key, faces, blurPadding, blurIntensit
   return res.json();
 }
 
-export async function blurAll(images, blurPadding, blurIntensity, blurShape) {
+export async function blurAll(images, blurPadding, blurIntensity) {
   const res = await fetch(`${API_BASE}/blur-all`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -55,7 +54,6 @@ export async function blurAll(images, blurPadding, blurIntensity, blurShape) {
       images,
       blur_padding: blurPadding,
       blur_intensity: blurIntensity,
-      blur_shape: blurShape,
     }),
   });
   if (!res.ok) throw new Error('Blur all failed');
