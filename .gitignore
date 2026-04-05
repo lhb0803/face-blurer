@@ -4,6 +4,7 @@ __pycache__/
 backend/venv/
 backend/uploads/
 *.tflite
+*.onnx
 
 # Node
 frontend/node_modules/
