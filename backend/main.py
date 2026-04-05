@@ -7,7 +7,8 @@ from pathlib import Path
 import cv2
 from fastapi import FastAPI, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
+from fastapi.responses import FileResponse, Response
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from blur_engine import detect_faces, blur_faces, encode_jpeg
@@ -23,6 +24,8 @@ app.add_middleware(
 
 UPLOAD_DIR = Path(__file__).parent / "uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)
+
+FRONTEND_DIR = Path(__file__).parent.parent / "frontend" / "dist"
 
 MAX_AGE_SECONDS = 3600  # 1 hour
 
@@ -127,3 +130,15 @@ def cleanup():
             f.unlink(missing_ok=True)
             count += 1
     return {"deleted": count}
+
+
+# Serve frontend static files (production)
+if FRONTEND_DIR.exists():
+    app.mount("/assets", StaticFiles(directory=FRONTEND_DIR / "assets"), name="assets")
+
+    @app.get("/{full_path:path}")
+    def serve_spa(full_path: str):
+        file_path = FRONTEND_DIR / full_path
+        if file_path.is_file():
+            return FileResponse(file_path)
+        return FileResponse(FRONTEND_DIR / "index.html")
